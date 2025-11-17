@@ -8,6 +8,7 @@ import android.opengl.GLES20;
 import android.opengl.GLSurfaceView;
 import android.util.AttributeSet;
 import android.view.Surface;
+import android.view.View;
 import android.widget.FrameLayout;
 
 import androidx.annotation.Nullable;
@@ -33,6 +34,8 @@ public class StereoGlPlayerView extends DoubleTapPlayerView {
 
     private final GLSurfaceView glSurfaceView;
     private final StereoRenderer stereoRenderer;
+    @Nullable
+    private SurfaceTexture surfaceTexture;
 
     public StereoGlPlayerView(Context context) {
         this(context, null);
@@ -80,6 +83,23 @@ public class StereoGlPlayerView extends DoubleTapPlayerView {
     public void setPlayer(@Nullable Player player) {
         super.setPlayer(player);
         stereoRenderer.setPlayer(player);
+    }
+
+    @Nullable
+    public SurfaceTexture getVideoSurfaceTexture() {
+        return surfaceTexture;
+    }
+
+    @Override
+    public boolean setDepthFrameListener(@Nullable Runnable listener) {
+        stereoRenderer.setDepthFrameListener(listener);
+        return true;
+    }
+
+    @Nullable
+    @Override
+    public View getDepthCaptureSurface() {
+        return glSurfaceView;
     }
 
     @Override
@@ -134,6 +154,8 @@ public class StereoGlPlayerView extends DoubleTapPlayerView {
         private int textureHandle;
         private float depthOffset = 0.04f;
         private Player player;
+        @Nullable
+        private Runnable depthFrameListener;
 
         StereoRenderer() {
             vertexBuffer = ByteBuffer.allocateDirect(VERTICES.length * 4)
@@ -155,6 +177,10 @@ public class StereoGlPlayerView extends DoubleTapPlayerView {
             }
         }
 
+        void setDepthFrameListener(@Nullable Runnable depthFrameListener) {
+            this.depthFrameListener = depthFrameListener;
+        }
+
         void release() {
             if (player != null && surface != null) {
                 player.clearVideoSurface(surface);
@@ -162,6 +188,7 @@ public class StereoGlPlayerView extends DoubleTapPlayerView {
             if (surfaceTexture != null) {
                 surfaceTexture.release();
                 surfaceTexture = null;
+                StereoGlPlayerView.this.surfaceTexture = null;
             }
             if (surface != null) {
                 surface.release();
@@ -175,6 +202,7 @@ public class StereoGlPlayerView extends DoubleTapPlayerView {
         public void onSurfaceCreated(GL10 gl, EGLConfig config) {
             textureId = createExternalTexture();
             surfaceTexture = new SurfaceTexture(textureId);
+            StereoGlPlayerView.this.surfaceTexture = surfaceTexture;
             surfaceTexture.setOnFrameAvailableListener(this);
             surface = new Surface(surfaceTexture);
             if (player != null) {
@@ -223,6 +251,9 @@ public class StereoGlPlayerView extends DoubleTapPlayerView {
         @Override
         public void onFrameAvailable(SurfaceTexture surfaceTexture) {
             glSurfaceView.requestRender();
+            if (depthFrameListener != null) {
+                depthFrameListener.run();
+            }
         }
 
         private int buildProgram() {

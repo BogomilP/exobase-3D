@@ -13,6 +13,7 @@ import android.view.View;
 import android.widget.ImageButton;
 import android.widget.TextView;
 
+import androidx.annotation.Nullable;
 import androidx.core.view.GestureDetectorCompat;
 import androidx.media3.common.C;
 import androidx.media3.exoplayer.SeekParameters;
@@ -109,6 +110,15 @@ public class CustomPlayerView extends PlayerView implements GestureDetector.OnGe
 
     public DepthTextureBridge getDepthTextureBridge() {
         return depthTextureBridge;
+    }
+
+    public boolean setDepthFrameListener(@Nullable Runnable listener) {
+        return false;
+    }
+
+    @Nullable
+    public View getDepthCaptureSurface() {
+        return getVideoSurfaceView();
     }
 
     public void clearIcon() {

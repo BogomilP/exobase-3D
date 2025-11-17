@@ -5,6 +5,7 @@ import android.graphics.Bitmap;
 import android.os.Build;
 import android.os.Handler;
 import android.os.HandlerThread;
+import android.os.SystemClock;
 import android.util.Log;
 import android.view.PixelCopy;
 import android.view.SurfaceView;
@@ -13,6 +14,8 @@ import android.view.View;
 
 import androidx.annotation.Nullable;
 import androidx.media3.ui.PlayerView;
+
+import com.brouken.player.CustomPlayerView;
 
 /**
  * Grabs frames from the video surface, runs depth inference at reduced resolution
@@ -28,8 +31,10 @@ public class DepthPipeline {
     private final DepthTextureBridge bridge;
     private final HandlerThread captureThread = new HandlerThread("depth-capture");
     private final Handler captureHandler;
+    private final boolean frameDriven;
 
     private boolean running;
+    private long lastCaptureTimestamp;
 
     public DepthPipeline(Context context, PlayerView playerView, DepthTextureBridge bridge) {
         this.playerView = playerView;
@@ -37,13 +42,20 @@ public class DepthPipeline {
         this.engine = new DepthInferenceEngine(context);
         captureThread.start();
         captureHandler = new Handler(captureThread.getLooper());
+        boolean supportsFrameListener = false;
+        if (playerView instanceof CustomPlayerView) {
+            supportsFrameListener = ((CustomPlayerView) playerView).setDepthFrameListener(this::onDepthFrameAvailable);
+        }
+        frameDriven = supportsFrameListener;
     }
 
     public void setPlaying(boolean playing) {
         if (playing) {
             if (!running) {
                 running = true;
-                scheduleCapture();
+                if (!frameDriven) {
+                    scheduleCapture();
+                }
             }
         } else {
             running = false;
@@ -54,6 +66,9 @@ public class DepthPipeline {
     public void release() {
         running = false;
         captureHandler.removeCallbacksAndMessages(null);
+        if (playerView instanceof CustomPlayerView) {
+            ((CustomPlayerView) playerView).setDepthFrameListener(null);
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2) {
             captureThread.quitSafely();
         } else {
@@ -65,21 +80,27 @@ public class DepthPipeline {
         captureHandler.postDelayed(this::captureFrame, CAPTURE_INTERVAL_MS);
     }
 
+    private void scheduleNextIfNeeded() {
+        if (!frameDriven) {
+            scheduleCapture();
+        }
+    }
+
     private void captureFrame() {
         if (!running) {
             return;
         }
 
-        final View videoSurface = playerView.getVideoSurfaceView();
+        final View videoSurface = resolveCaptureSurface();
         if (videoSurface == null) {
-            scheduleCapture();
+            scheduleNextIfNeeded();
             return;
         }
 
         final int width = videoSurface.getWidth();
         final int height = videoSurface.getHeight();
         if (width <= 0 || height <= 0) {
-            scheduleCapture();
+            scheduleNextIfNeeded();
             return;
         }
 
@@ -90,17 +111,38 @@ public class DepthPipeline {
                 if (result == PixelCopy.SUCCESS) {
                     process(captureBitmap, width, height);
                 }
-                scheduleCapture();
+                scheduleNextIfNeeded();
             }, captureHandler);
         } else if (videoSurface instanceof TextureView) {
             TextureView textureView = (TextureView) videoSurface;
             Bitmap bitmap = textureView.getBitmap(captureBitmap);
             process(bitmap, width, height);
-            scheduleCapture();
+            scheduleNextIfNeeded();
         } else {
             Log.w(TAG, "Unsupported surface for depth capture");
-            scheduleCapture();
+            scheduleNextIfNeeded();
         }
+    }
+
+    private void onDepthFrameAvailable() {
+        if (!frameDriven || !running) {
+            return;
+        }
+
+        final long now = SystemClock.uptimeMillis();
+        if (now - lastCaptureTimestamp < CAPTURE_INTERVAL_MS) {
+            return;
+        }
+        lastCaptureTimestamp = now;
+        captureHandler.post(this::captureFrame);
+    }
+
+    @Nullable
+    private View resolveCaptureSurface() {
+        if (playerView instanceof CustomPlayerView) {
+            return ((CustomPlayerView) playerView).getDepthCaptureSurface();
+        }
+        return playerView.getVideoSurfaceView();
     }
 
     private void process(@Nullable Bitmap bitmap, int surfaceWidth, int surfaceHeight) {
