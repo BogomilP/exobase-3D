@@ -19,6 +19,8 @@ import androidx.media3.exoplayer.SeekParameters;
 import androidx.media3.ui.AspectRatioFrameLayout;
 import androidx.media3.ui.PlayerView;
 
+import com.brouken.player.depth.DepthTextureBridge;
+
 import java.util.Collections;
 
 public class CustomPlayerView extends PlayerView implements GestureDetector.OnGestureListener, ScaleGestureDetector.OnScaleGestureListener {
@@ -66,6 +68,8 @@ public class CustomPlayerView extends PlayerView implements GestureDetector.OnGe
     private final AudioManager mAudioManager;
     private BrightnessControl brightnessControl;
 
+    private DepthTextureBridge depthTextureBridge;
+
     private final TextView exoErrorMessage;
     private final View exoProgress;
 
@@ -97,6 +101,14 @@ public class CustomPlayerView extends PlayerView implements GestureDetector.OnGe
                 }
             });
         }
+    }
+
+    public void setDepthTextureBridge(DepthTextureBridge bridge) {
+        this.depthTextureBridge = bridge;
+    }
+
+    public DepthTextureBridge getDepthTextureBridge() {
+        return depthTextureBridge;
     }
 
     public void clearIcon() {

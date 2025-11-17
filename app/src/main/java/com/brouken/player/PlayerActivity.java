@@ -97,6 +97,8 @@ import androidx.media3.ui.TimeBar;
 
 import com.brouken.player.dtpv.DoubleTapPlayerView;
 import com.brouken.player.dtpv.youtube.YouTubeOverlay;
+import com.brouken.player.depth.DepthPipeline;
+import com.brouken.player.depth.DepthTextureBridge;
 import com.getkeepsafe.taptargetview.TapTarget;
 import com.getkeepsafe.taptargetview.TapTargetView;
 import com.google.android.material.snackbar.Snackbar;
@@ -182,6 +184,9 @@ public class PlayerActivity extends Activity {
     public static boolean locked = false;
     private Thread nextUriThread;
     public Thread frameRateSwitchThread;
+
+    private DepthPipeline depthPipeline;
+    private DepthTextureBridge depthTextureBridge;
 
     public static boolean restoreControllerTimeout = false;
     public static boolean shortControllerTimeout = false;
@@ -323,6 +328,10 @@ public class PlayerActivity extends Activity {
         playerView = findViewById(R.id.video_view);
         exoPlayPause = findViewById(R.id.exo_play_pause);
         loadingProgressBar = findViewById(R.id.loading);
+
+        depthTextureBridge = new DepthTextureBridge();
+        playerView.setDepthTextureBridge(depthTextureBridge);
+        depthPipeline = new DepthPipeline(this, playerView, depthTextureBridge);
 
         playerView.setShowNextButton(false);
         playerView.setShowPreviousButton(false);
@@ -1403,6 +1412,11 @@ public class PlayerActivity extends Activity {
             savePlayer();
         }
 
+        if (depthPipeline != null) {
+            depthPipeline.release();
+            depthPipeline = null;
+        }
+
         if (player != null) {
             notifyAudioSessionUpdate(false);
 
@@ -1440,6 +1454,10 @@ public class PlayerActivity extends Activity {
         @Override
         public void onIsPlayingChanged(boolean isPlaying) {
             playerView.setKeepScreenOn(isPlaying);
+
+            if (depthPipeline != null) {
+                depthPipeline.setPlaying(isPlaying);
+            }
 
             if (Utils.isPiPSupported(PlayerActivity.this)) {
                 if (isPlaying) {
